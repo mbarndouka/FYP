@@ -1,0 +1,116 @@
+version: "3.8"
+
+services:
+  # FastAPI Application
+  fastapi-app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - APP_NAME=FastAPI Supabase App
+      - DEBUG=True
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379
+      - CELERY_RESULT_BACKEND=redis://redis:6379
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - seismic_data:/app/uploads/seismic
+      - reservoir_data:/app/uploads/reservoir
+      - processing_data:/app/processing
+      - cache_data:/app/cache
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - db-migration
+
+  # Redis for Celery
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # Celery Worker for Seismic Processing
+  celery-worker:
+    build: .
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379
+      - CELERY_RESULT_BACKEND=redis://redis:6379
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - seismic_data:/app/uploads/seismic
+      - reservoir_data:/app/uploads/reservoir
+      - processing_data:/app/processing
+      - cache_data:/app/cache
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - db-migration
+
+  # Celery Beat for Scheduled Tasks
+  celery-beat:
+    build: .
+    command: celery -A app.celery_app beat --loglevel=info
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379
+      - CELERY_RESULT_BACKEND=redis://redis:6379
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - db-migration
+
+  # Flower for Celery Monitoring
+  flower:
+    build: .
+    command: celery -A app.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379
+      - CELERY_RESULT_BACKEND=redis://redis:6379
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    depends_on:
+      - redis
+
+  # Database Migration
+  db-migration:
+    build: .
+    command: alembic upgrade head
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    restart: "no"
+
+volumes:
+  redis_data:
+  seismic_data:
+  reservoir_data:
+  processing_data:
+  cache_data:
