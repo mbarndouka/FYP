@@ -1,0 +1,27 @@
+/env/
+/venv/
+**/__pycache__/**
+*__pycache__*
+.env
+/venv/
+env-upgrade
+**/__pycache__/**
+*__pycache__*
+.env
+
+# migrations but not the __init__.py
+**/migrations/*
+!/**/migrations/__init__.py
+*/migrations/*
+
+# media file but not the content of default
+media/*
+!/media/default/
+!/media/default/**
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode
