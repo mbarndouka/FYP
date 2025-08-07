@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.10-slim-bookworm
 
 # Set working directory
 WORKDIR /app
@@ -47,8 +47,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel cython
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel cython uv
+RUN uv pip install --no-cache-dir -r requirements.txt --system
 
 # Copy application code
 COPY . .
