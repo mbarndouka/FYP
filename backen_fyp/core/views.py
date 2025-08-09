@@ -6,7 +6,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import action
 
-from core.serializers import CustomTokenObtainPairSerializer, UserCreateSerializer
+from core.serializers import CustomTokenObtainPairSerializer, UserCreateSerializer, SeismicDataSerializer
+from core.models import SeismicData
 
 class UserLogin(viewsets.ModelViewSet):
     permission_classes = (AllowAny,)
@@ -66,7 +67,7 @@ class UserViewSet(viewsets.ModelViewSet):
     def user_registration(self, request):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.save()
+            serializer.save()
             return Response({
                 "successMessage": "User created successfully",
                 "status_code": status.HTTP_201_CREATED,
@@ -82,3 +83,34 @@ class UserViewSet(viewsets.ModelViewSet):
             "errorMessage": error_data,
             "status_code": status.HTTP_400_BAD_REQUEST,
         }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post', 'get'], url_path='data-processor')
+    def data_processor(self, request):
+        if request.method == 'POST':
+            serializer = SeismicDataSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                seismic_data = serializer.save()
+                return Response({
+                    "successMessage": "Seismic data processed successfully",
+                    "status_code": status.HTTP_201_CREATED,
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            error_data = ''
+            for field, errors in serializer.errors.items():
+                for error in errors:
+                    error_data += f"{field}: {error}. "
+
+            return Response({
+                "errorMessage": error_data,
+                "status_code": status.HTTP_400_BAD_REQUEST,
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        elif request.method == 'GET':
+            all_file = SeismicData.objects.all()
+            serializer = SeismicDataSerializer(all_file, many=True, context={'request': request})
+            return Response({
+                "successMessage": "All seismic data retrieved successfully",
+                "status_code": status.HTTP_200_OK,
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)

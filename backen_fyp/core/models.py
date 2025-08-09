@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+import pandas as pd
 
 # Create your models here.
 from django.contrib.auth.models import BaseUserManager, AbstractBaseUser, PermissionsMixin
@@ -124,3 +125,40 @@ class User(AbstractBaseUser, PermissionsMixin):
         verbose_name = _('user')
         verbose_name_plural = _('users')
         ordering = ['-date_joined']
+
+class SeismicData(models.Model):
+    """
+    Model representing seismic data.
+    """
+    CSV_COLUMN_NAMES =[
+        'time',
+        'latitude',
+        'longitude',
+        'depth', # Depth of the event
+        'mag', # Magnitude
+        'magtype', # Type of magnitude
+        'nst', # Number of stations reporting
+        'gap', # Azimuthal gap
+        'dmin', # Minimum distance to nearest station
+        'rms', # Root mean square
+        'net', # Network code
+        'id', # Event ID
+        'updated', # Last updated time
+        'place', # Location description
+        'type', # Event type
+        'horizontalerror', # Horizontal error
+        'deptherror', # Depth error
+        'magerror', # Magnitude error
+        'magnst', # Magnitude number of stations
+        'status', # Event status
+        'locationsource', # Source of location information
+        'magsource', # Source of magnitude information
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    csv_file = models.FileField(upload_to='seismic_data/')
+    processing_time = models.CharField(max_length=50, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('seismic data')
+        verbose_name_plural = _('seismic data')
