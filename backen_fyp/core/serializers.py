@@ -1,9 +1,17 @@
+from django.core.files.base import ContentFile
+import io
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+from django.conf import settings
+from django.core.files.base import ContentFile
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework import serializers, exceptions
 from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError as django_exceptions
 from django.contrib.auth.password_validation import validate_password
-from core.models import User, SeismicData
+from django.db.models import Q
+from core.models import User, SeismicData, Chat, RoomChat
 
 from django.utils import timezone
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -43,11 +51,14 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['gender'] = user.gender
 
         return token
-    
+
 class UserCreateSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(
+        read_only=True,
+    )
     class Meta:
         model = User
-        fields = ('email', 'username', 'full_name', 'gender', "password")
+        fields = ('id','email', 'username', 'full_name', 'gender', "password")
         extra_kwargs = {'password': {'write_only': True}}
     
     def validate(self, attrs):    
@@ -69,17 +80,83 @@ class UserCreateSerializer(serializers.ModelSerializer):
         user.set_password(validated_data.get('password'))
         user.save()
         return user
+    
+class ChatSerializer(serializers.ModelSerializer):
+    sender = serializers.SerializerMethodField(
+        read_only=True,
+        help_text="Sender details"
+    )
+    receiver = serializers.SerializerMethodField(
+        read_only=True,
+        help_text="Receiver details"
+    )
 
-import pandas as pd
-from django.core.files.base import ContentFile
-import io
-import os
-import matplotlib.pyplot as plt
-from django.conf import settings
-from django.core.files.base import ContentFile
-import plotly.graph_objects as go
-import plotly.offline as pyo
-import numpy as np
+    def get_sender(self, obj:Chat):
+        return UserCreateSerializer(obj.sender).data
+
+    def get_receiver(self, obj:Chat):
+        return UserCreateSerializer(obj.receiver).data
+
+    class Meta:
+        model = Chat
+        fields = ('id', 'sender', 'receiver', 'message', 'timestamp')
+
+class RoomChatSerializer(serializers.ModelSerializer):
+    sender = serializers.HiddenField(
+        default=serializers.CurrentUserDefault()
+    )
+    sender_details = serializers.SerializerMethodField(
+        read_only=True,
+        help_text="Sender details"
+    )
+    receiver_details = serializers.SerializerMethodField(
+        read_only=True,
+        help_text="Receiver details"
+    )
+    message = serializers.CharField(
+        help_text="Message content",
+        write_only=True
+    )
+    chats = serializers.SerializerMethodField(
+        read_only=True,
+        help_text="Chat messages in the room"
+    )
+
+    def get_chats(self, obj: RoomChat):
+        return ChatSerializer(obj.chats.all(), many=True).data
+
+    def get_sender_details(self, obj: RoomChat):
+        return UserCreateSerializer(obj.sender).data
+
+    def get_receiver_details(self, obj: RoomChat):
+        return UserCreateSerializer(obj.receiver).data
+
+    class Meta:
+        model = RoomChat
+        fields = ('id', 'sender', 'receiver', 'sender_details', 'receiver_details','chats', 'message', 'created_at')
+
+    def create(self, validated_data):
+        message = validated_data.pop('message', None)
+        try:
+            # receiver = User.objects.get(id=validated_data['receiver'])
+            room = RoomChat.objects.get(
+                Q(sender=validated_data['sender'], receiver=validated_data['receiver']) |
+                Q(sender=validated_data['receiver'], receiver=validated_data['sender'])
+            )
+        except RoomChat.DoesNotExist:
+            room = RoomChat.objects.create(
+                sender=validated_data['sender'],
+                receiver=validated_data['receiver']
+            )
+        chat = Chat.objects.create(
+            sender=validated_data['sender'],
+            receiver=validated_data['receiver'],
+            message=message
+        )
+        room.chats.add(chat)
+        room.save()
+        return room
+
 class SeismicDataSerializer(serializers.ModelSerializer):
     csv_file = serializers.FileField(required=True)
     data_processed = serializers.SerializerMethodField(

@@ -21,6 +21,7 @@ media/*
 
 # Environment
 .env
+db.sqlite3
 
 # IDE
 .idea/

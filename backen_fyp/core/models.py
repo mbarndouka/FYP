@@ -162,3 +162,24 @@ class SeismicData(models.Model):
     class Meta:
         verbose_name = _('seismic data')
         verbose_name_plural = _('seismic data')
+
+class Chat(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_chats')
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_chats')
+    message = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['timestamp']
+
+
+class RoomChat(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='room_chats_user_1')
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='room_chats_user_2')
+    chats = models.ManyToManyField(Chat, related_name='room_chats')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']

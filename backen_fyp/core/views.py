@@ -5,9 +5,10 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import action
+from django.db.models import Q
 
-from core.serializers import CustomTokenObtainPairSerializer, UserCreateSerializer, SeismicDataSerializer
-from core.models import SeismicData
+from core.serializers import CustomTokenObtainPairSerializer, UserCreateSerializer, SeismicDataSerializer, RoomChatSerializer
+from core.models import SeismicData, RoomChat, User
 
 class UserLogin(viewsets.ModelViewSet):
     permission_classes = (AllowAny,)
@@ -28,12 +29,8 @@ class UserLogin(viewsets.ModelViewSet):
         
         error_data = ''
         
-        if serializer.errors.get('username'):
-            error_data += 'usename filed is required. '
-        if serializer.errors.get('password'):
-            error_data += 'password is required. '
-        if serializer.errors.get('login_error'):
-            error_data += serializer.errors.get('login_error')[0]
+        for key, value in serializer.errors.items():
+            error_data += f"{key}: {value}"
 
         return Response({
             "errorMessage": error_data,
@@ -45,7 +42,7 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserCreateSerializer
 
     def get_queryset(self):
-        return self.request.user
+        return User.objects.all()
     
     def get_permissions(self):
         if self.action == "user_registration":
@@ -63,6 +60,56 @@ class UserViewSet(viewsets.ModelViewSet):
             "data": serializer.data
         }, status=status.HTTP_200_OK)
     
+    @action(detail=False, methods=['post', 'get'], url_path='chat')
+    def room_chat(self, request):
+        if request.method == 'POST':
+            serializer = RoomChatSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                room = serializer.save()
+                return Response({
+                    "successMessage": "Chat room created successfully",
+                    "status_code": status.HTTP_201_CREATED,
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            error_data = ''
+            for field, errors in serializer.errors.items():
+                for error in errors:
+                    error_data += f"{field}: {error}. "
+
+            return Response({
+                "errorMessage": error_data,
+                "status_code": status.HTTP_400_BAD_REQUEST,
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        elif request.method == 'GET':
+            room_id = request.query_params.get('room_id', None)
+
+            if room_id:
+                try:
+                    room = RoomChat.objects.get(id=room_id)
+                    serializer = RoomChatSerializer(room, context={'request': request})
+                    return Response({
+                        "successMessage": "Chat room retrieved successfully",
+                        "status_code": status.HTTP_200_OK,
+                        "data": serializer.data
+                    }, status=status.HTTP_200_OK)
+                except RoomChat.DoesNotExist:
+                    return Response({
+                        "errorMessage": "Chat room not found",
+                        "status_code": status.HTTP_404_NOT_FOUND,
+                    }, status=status.HTTP_404_NOT_FOUND)
+                
+            all_rooms = RoomChat.objects.filter(
+                Q(sender=request.user) | Q(receiver=request.user)
+            )
+            serializer = RoomChatSerializer(all_rooms, many=True, context={'request': request})
+            return Response({
+                "successMessage": "All chat rooms retrieved successfully",
+                "status_code": status.HTTP_200_OK,
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=['post'], url_path='registration')
     def user_registration(self, request):
         serializer = self.get_serializer(data=request.data)
